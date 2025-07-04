@@ -1,0 +1,17 @@
+#API
+fastapi
+uvicorn
+
+#Env variables
+python-dotenv
+
+#AI
+langchain
+langchain-openai
+langchain-community
+langchain-tavily
+langgraph
+langfuse
+
+# Grpah png vizualisation
+graphviz
