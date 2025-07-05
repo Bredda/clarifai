@@ -44,7 +44,7 @@ export default function Home() {
         <div className="flex flex-col items-center gap-2">
           <div className="text-4xl font-bold">Clarif.ai</div>
           <div className="text-muted-foreground -4pt">
-            Some short and impcatfull tagline
+            Empowering your critical thinking with AI
           </div>
         </div>
 
