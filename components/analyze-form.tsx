@@ -1,9 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Button } from "./ui/button";
-import { Textarea } from "./ui/textarea";
 import { useState } from "react";
+import { SimpleInvite } from "./simple-invite";
 
 interface AnalyzeFormProps {
   className?: string;
@@ -23,13 +22,10 @@ export default function AnalyzeForm({
   };
   return (
     <div className={cn("grid w-full gap-2", className)}>
-      <Textarea
-        placeholder="Texte à analyser"
-        rows={50}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
+      <SimpleInvite
+        description="Copy-past text or source URL to analyze"
+        onSubmit={handleAnalyze}
       />
-      <Button onClick={handleAnalyze}>Analyser</Button>
     </div>
   );
 }
