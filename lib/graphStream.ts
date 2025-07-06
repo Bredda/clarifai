@@ -1,7 +1,7 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { GraphEvent } from "@/types/types";
 
-interface useClarifyProps {
+interface GraphStreamHandlers {
   onComplete?(): void;
   onError?(error: Error): void;
   onEvent?(event: GraphEvent): void;
@@ -9,15 +9,16 @@ interface useClarifyProps {
   onClose?(): void;
 }
 
-export function useClarify({
+export function createGraphStream({
   onComplete,
   onError,
   onEvent,
   onToken,
   onClose,
-}: useClarifyProps) {
-  async function complete({ content }: { content: string }) {
+}: GraphStreamHandlers) {
+  return async function complete({ content }: { content: string }) {
     const ctrl = new AbortController();
+    console.log("Graph stream started with content:", content);
     await fetchEventSource("/api/clarify", {
       method: "POST",
       headers: {
@@ -26,6 +27,7 @@ export function useClarify({
       },
       body: JSON.stringify({ content }),
       openWhenHidden: false,
+
       signal: ctrl.signal,
       async onopen(res) {
         if (
@@ -38,22 +40,27 @@ export function useClarify({
         throw new Error(`❌ Unexpected response: ${res.status}`);
       },
       onmessage(ev) {
-        const data: { event: GraphEvent; done: boolean } = JSON.parse(ev.data);
-        if (data.event.stepId === "token" && data.event.label) {
-          if (onToken) {
-            onToken(data.event.label);
+        try {
+          const data: { event: GraphEvent; done: boolean } = JSON.parse(
+            ev.data
+          );
+
+          if (data.event.stepId === "token" && data.event.label) {
+            onToken?.(data.event.label);
+          } else if (data.event.stepId === "[DONE]") {
+            ctrl.abort(); // Fin propre
+            onComplete?.();
+          } else {
+            onEvent?.(data.event);
           }
-        } else if (data.event.stepId === "[DONE]") {
-          ctrl.abort();
-          if (onComplete) {
-            onComplete();
-          }
-        } else {
-          console.log("🔄 Grpah event received", data.event);
-          if (onEvent) onEvent(data.event);
+        } catch (err) {
+          console.error(
+            "❌ Failed to parse SSE message, aborting stream",
+            ev.data,
+            err
+          );
         }
       },
-
       onerror(ev) {
         ctrl.abort();
         const error =
@@ -63,18 +70,12 @@ export function useClarify({
                 `❌ SSE stream error: ${ev.message || "Unknown error"}`
               );
         console.error("Error on SSE stream", error);
-        if (onError) {
-          onError(error);
-        }
+        onError?.(error);
         throw error;
       },
       onclose() {
-        if (onClose) {
-          onClose();
-        }
+        onClose?.();
       },
     });
-  }
-
-  return complete;
+  };
 }

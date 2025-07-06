@@ -1,13 +1,13 @@
 import { PromptTemplate } from "@langchain/core/prompts";
 import { GraphState } from "../graph";
 import { initChatModel } from "langchain/chat_models/universal";
-import { Segment } from "@/types/types";
+import { ExtractedBias, ExtractedVerifiedClaim } from "../schema";
 
 const prompt = PromptTemplate.fromTemplate(`
     Tu es un analyste assistant chargé d'évaluer la fiabilité d'un document.
 
     Tu recevras :
-    - Une liste d'affirmations extraites du texte, avec leur statut de vérification (vrai, faux, incertain).
+    - Une liste d'affirmations extraites du texte, avec des informations de vérification (vrai, faux, incertain).
     - Une liste de biais détectés dans le texte.
 
     Ta tâche est de produire un rapport de synthèse structuré et compréhensible pour un utilisateur non-expert, avec :
@@ -24,44 +24,36 @@ const prompt = PromptTemplate.fromTemplate(`
     ### Biais détectés :
     {biases}`);
 
-function formatBiases(segments: Segment[]) {
-  return segments
-    .map((segment) => {
-      return segment.biases
-        .map(
-          (bias) =>
-            `- **${bias.type}** : ${bias.content} (explication : ${bias.explanation}, ELI5 : ${bias.eli5})`
-        )
-        .join("\n");
-    })
-    .filter((biases) => biases.length > 0)
-    .join("\n\n");
+function formatBiases(biases: ExtractedBias[]) {
+  return biases
+    .map((bias) => `- **${bias.biasType}** : ${bias.content}`)
+    .join("\n");
 }
 
-function formatClaims(segments: Segment[]) {
-  return segments
-    .map((segment) => {
-      return segment.claims
-        .map(
-          (claim) =>
-            `- **${claim.verdict}** : ${claim.content} (explication : ${
-              claim.explanation
-            }, sources : ${claim.source.join(", ")})`
-        )
-        .join("\n");
-    })
-    .filter((claims) => claims.length > 0)
-    .join("\n\n");
+function formatClaims(claims: ExtractedVerifiedClaim[]) {
+  return claims
+    .map(
+      (claim) =>
+        `- **${claim.verdict}** : ${claim.content} (explication : ${
+          claim.explanation
+        }, sources : ${claim.sources.join(", ")})`
+    )
+    .join("\n");
 }
 export async function reporter(state: GraphState) {
+  console.debug("Generating report...");
+  if (!state.verifiedClaims || !state.extractedBiases) {
+    throw new Error("No verified claims or biases to report on.");
+  }
+
   const model = await initChatModel(state.configuration.agregationModel, {
     modelProvider: "openai",
     temperature: 0,
   });
   const chain = prompt.pipe(model.withConfig({ tags: ["reporter"] }));
   const response = await chain.invoke({
-    verified_claims: formatClaims(state.segments),
-    biases: formatBiases(state.segments),
+    verified_claims: formatClaims(state.verifiedClaims),
+    biases: formatBiases(state.extractedBiases),
   });
 
   const event = {
@@ -74,5 +66,6 @@ export async function reporter(state: GraphState) {
 
   return {
     report: response.content,
+    events: [event],
   };
 }
